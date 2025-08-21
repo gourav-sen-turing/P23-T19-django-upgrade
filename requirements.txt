@@ -1,0 +1,15 @@
+attrs==22.1.0
+coverage==6.4.4
+# Editable Git install with no remote (django-upgrade==1.10.0)
+-e /home/rails/P23/T19-django-upgrade/TaskFolder/Repo
+importlib-metadata==4.12.0
+iniconfig==1.1.1
+packaging==21.3
+pluggy==1.0.0
+py==1.11.0
+pyparsing==3.0.9
+pytest==7.1.3
+pytest-randomly==3.12.0
+tokenize-rt==4.2.1
+tomli==2.0.1
+zipp==3.8.1
