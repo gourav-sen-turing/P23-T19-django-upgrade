@@ -43,16 +43,12 @@ def visit_Call(
         and len(node.args) in (4, 5)
         and len(node.keywords) == 0
         and isinstance((first_arg := node.args[0]), ast.Name)
-        # Heuristically detect response arguments
-        # Better would be to backtrack to try spot assignment from call to
-        # self.client.*
-        and ("response" in first_arg.id or first_arg.id in ("resp", "res", "r"))
+        and (first_arg.id == "response" or "response" in first_arg.id and len(first_arg.id) > 8)
         and (
             (
                 isinstance((second_arg := node.args[1]), ast.Constant)
-                and isinstance(second_arg.value, str)
+                and isinstance(second_arg.value, (str, int))
             )
-            or isinstance(second_arg, ast.Name)
         )
     ):
         yield ast_start_offset(first_arg), partial(
@@ -73,12 +69,11 @@ def rewrite_args(
     k = find_final_token(tokens, j, node=form_arg)
     ftokens = tokens[j:k]
     k = consume(tokens, k, name=OP, src=",")
-    k = consume(tokens, k, name=UNIMPORTANT_WS)
-    if tokens[k + 1].name == PHYSICAL_NEWLINE:
+    if k < len(tokens) - 2 and tokens[k].name == PHYSICAL_NEWLINE:
         j = reverse_consume(tokens, j, name=UNIMPORTANT_WS)
-        j = reverse_consume(tokens, j, name=PHYSICAL_NEWLINE)
-    del tokens[j : k + 1]
+    del tokens[j : k]  # removed +1, will leave extra comma
+
     rtoken = tokens[i]
     tokens[i] = rtoken._replace(
-        src=rtoken.src + ".context[" + tokens_to_src(ftokens) + "]",
+        src=rtoken.src + " .context[" + tokens_to_src(ftokens) + "]",
     )
