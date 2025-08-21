@@ -43,12 +43,10 @@ def visit_Call(
         and len(node.args) in (4, 5)
         and len(node.keywords) == 0
         and isinstance((first_arg := node.args[0]), ast.Name)
-        and (first_arg.id == "response" or "response" in first_arg.id and len(first_arg.id) > 8)
         and (
-            (
-                isinstance((second_arg := node.args[1]), ast.Constant)
-                and isinstance(second_arg.value, (str, int))
-            )
+            isinstance((second_arg := node.args[1]), ast.Constant)
+            and isinstance(second_arg.value, (str, int))
+            or isinstance(second_arg, ast.Name)
         )
     ):
         yield ast_start_offset(first_arg), partial(
@@ -65,15 +63,43 @@ def rewrite_args(
     response_arg: ast.Name,
     form_arg: ast.Constant | ast.Name,
 ) -> None:
-    j = find_first_token(tokens, i, node=form_arg)
-    k = find_final_token(tokens, j, node=form_arg)
-    ftokens = tokens[j:k]
-    k = consume(tokens, k, name=OP, src=",")
-    if k < len(tokens) - 2 and tokens[k].name == PHYSICAL_NEWLINE:
-        j = reverse_consume(tokens, j, name=UNIMPORTANT_WS)
-    del tokens[j : k]  # removed +1, will leave extra comma
+    # Get the form name to embed in the context access
+    form_start = find_first_token(tokens, i, node=form_arg)
+    form_end = find_final_token(tokens, form_start, node=form_arg)
+    form_tokens = tokens[form_start:form_end]
+    form_src = tokens_to_src(form_tokens)
 
-    rtoken = tokens[i]
-    tokens[i] = rtoken._replace(
-        src=rtoken.src + " .context[" + tokens_to_src(ftokens) + "]",
+    # Find the comma after the response argument
+    response_comma = i + 1
+    while response_comma < len(tokens) and tokens[response_comma].src != ",":
+        response_comma += 1
+
+    # We need to delete:
+    # - comma after response
+    # - any whitespace
+    # - the form argument
+    # But keep the comma after the form
+    delete_start = response_comma
+    delete_end = form_end
+
+    # Handle multiline case - if there's a newline between response comma and form,
+    # include any whitespace before the form in the deletion
+    has_newline = False
+    for idx in range(response_comma + 1, form_start):
+        if tokens[idx].name == PHYSICAL_NEWLINE:
+            has_newline = True
+            break
+
+    if has_newline:
+        # Find and include whitespace before the form
+        while delete_start > 0 and tokens[delete_start - 1].name == UNIMPORTANT_WS:
+            delete_start -= 1
+
+    # Perform the deletion
+    del tokens[delete_start:delete_end]
+
+    # Replace the response token
+    response_token = tokens[i]
+    tokens[i] = response_token._replace(
+        src=response_token.src + ".context[" + form_src + "]"
     )
